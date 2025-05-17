@@ -59,9 +59,8 @@ ms/task, prior to starting.
 
 -
 - 2025-05-17: No memory-bank directory existed initially. Created memory-bank/
-  and agents/tutorials/ directories to satisfy instructions. Always run `ls /bin`,
+  and agents/tutorials/ directories to satisfy instructions. Always run `ls /bin`, `ls /usr/bin`, `ls /sbin`, and `ls /usr/sbin` before starting work.
 - 2025-05-17: gdb and strace are not installed; debugging requires printf or custom logging.
-  `ls /usr/bin`, `ls /sbin`, and `ls /usr/sbin` before starting work.
 
 ## Post-mortem [ADD NEW POST-MORTEMS BELOW WITH TIMESTAMPS]
 -
