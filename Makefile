@@ -2,7 +2,7 @@ EXT=$(shell r2 -H R2_LIBEXT)
 CFLAGS+=$(shell pkg-config --cflags r_core)
 LDFLAGS+=$(shell pkg-config --libs r_core)
 R2SYSPLUGDIR=$(shell r2 -H R2_LIBR_PLUGINS)
-R2USRPLUGDIR=$(shell r2 -H R2_USER_PLUGINS)
+	R2USRPLUGDIR=$(shell r2 -H R2_USER_PLUGINS)
 CFLAGS+=-I. -fPIC
 CFLAGS+=-Wall
 CFLAGS+=-g
@@ -68,15 +68,19 @@ r2check:
 	@r2 -qcq --
 
 # Unit tests
-TESTS=tests/messages_test
+TESTS=tests/messages_test tests/tools_test
 
-$(TESTS): tests/messages_test.c messages.o
+tests/messages_test: tests/messages_test.c messages.o
 	$(CC) $(CFLAGS) -o $@ tests/messages_test.c messages.o $(LDFLAGS)
+
+tests/tools_test: tests/tools_test.c tools.o markdown.o
+	$(CC) $(CFLAGS) -o $@ tests/tools_test.c tools.o markdown.o $(LDFLAGS)
 
 .PHONY: test
 
 test: $(TESTS)
 	./tests/messages_test
+	./tests/tools_test
 
 clean:
 	rm -f *.o *.d $(TESTS)

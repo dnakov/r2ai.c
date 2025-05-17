@@ -43,9 +43,24 @@ static void test_json_roundtrip(void) {
     free(json);
 }
 
+static void test_msgs_parse_from_response(void) {
+    const char *resp_json = "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"pong\"}}]}";
+    char *resp = strdup(resp_json);
+    R2AI_Messages *msgs = r2ai_msgs_new();
+    assert(r2ai_msgs_from_response(msgs, resp));
+    free(resp);
+    assert(msgs->n_messages == 1);
+    assert(strcmp(msgs->messages[0].role, "assistant") == 0);
+    assert(strcmp(msgs->messages[0].content, "pong") == 0);
+    r2ai_msgs_clear(msgs);
+    assert(msgs->n_messages == 0);
+    r2ai_msgs_free(msgs);
+}
+
 int main(void) {
     test_msgs_add_and_delete();
     test_json_roundtrip();
+    test_msgs_parse_from_response();
     printf("All tests passed\n");
     return 0;
 }

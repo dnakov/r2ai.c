@@ -61,9 +61,14 @@ ms/task, prior to starting.
 - 2025-05-17: No memory-bank directory existed initially. Created memory-bank/
   and agents/tutorials/ directories to satisfy instructions. Always run `ls /bin`, `ls /usr/bin`, `ls /sbin`, and `ls /usr/sbin` before starting work.
 - 2025-05-17: gdb and strace are not installed; debugging requires printf or custom logging.
+- 2025-05-18: r_json_parse requires a mutable char buffer; use strdup on string literals before parsing.
+- 2025-05-18: No interactive editors like `vi` or `nano`; edit files using `sed` or similar commands.
 
 ## Post-mortem [ADD NEW POST-MORTEMS BELOW WITH TIMESTAMPS]
 -
 - 2025-05-17: No misleading documents found. Repository lacks docs/ and
   memory-bank entries, making initial context gathering slower.
 - 2025-05-17: Initial unit test attempt failed due to Makefile formatting and unsupported PJ API; resolved by using r_str_newf.
+- 2025-05-18: r_json_parse requires a mutable string; using a string literal caused segfaults during tests.
+- 2025-05-18: Tools unit tests initially failed due to passing immutable strings to r_json_parse; fixed by duplicating the input.
+- 2025-05-18: AGENTS.md lacked trailing newline causing prompt artifacts during viewing.
