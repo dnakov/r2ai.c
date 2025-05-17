@@ -23,3 +23,6 @@ There were no tests or memory-bank directory initially. The Makefile builds a ra
 ## Testing
 - Run `make test` to compile and run unit tests in the `tests/` directory.
 - Tests link against radare2 core libraries using pkg-config.
+- `r_json_parse` modifies its input buffer, so pass mutable strings (use `strdup`) in tests.
+- Interactive editors like `vi` and `nano` are not installed; rely on `sed` or
+  other command-line tools for editing files.
