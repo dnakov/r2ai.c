@@ -20,3 +20,6 @@ There were no tests or memory-bank directory initially. The Makefile builds a ra
 - Use `clang-format` for code style. Scripts `indent.py` and `indent2.py` help with formatting.
 - The code uses PJ (printf-style JSON builder) from r2 libs.
 
+## Testing
+- Run `make test` to compile and run unit tests in the `tests/` directory.
+- Tests link against radare2 core libraries using pkg-config.
