@@ -58,6 +58,13 @@ ms/task, prior to starting.
 ## Environment Lessons [ADD NEW LESSONS BELOW WITH TIMESTAMPS]
 
 -
+- 2025-05-17: No memory-bank directory existed initially. Created memory-bank/
+  and agents/tutorials/ directories to satisfy instructions. Always run `ls /bin`,
+- 2025-05-17: gdb and strace are not installed; debugging requires printf or custom logging.
+  `ls /usr/bin`, `ls /sbin`, and `ls /usr/sbin` before starting work.
 
 ## Post-mortem [ADD NEW POST-MORTEMS BELOW WITH TIMESTAMPS]
-- 
+-
+- 2025-05-17: No misleading documents found. Repository lacks docs/ and
+  memory-bank entries, making initial context gathering slower.
+- 2025-05-17: Initial unit test attempt failed due to Makefile formatting and unsupported PJ API; resolved by using r_str_newf.

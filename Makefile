@@ -66,5 +66,17 @@ uninstall:
 
 r2check:
 	@r2 -qcq --
+
+# Unit tests
+TESTS=tests/messages_test
+
+$(TESTS): tests/messages_test.c messages.o
+	$(CC) $(CFLAGS) -o $@ tests/messages_test.c messages.o $(LDFLAGS)
+
+.PHONY: test
+
+test: $(TESTS)
+	./tests/messages_test
+
 clean:
-	rm -f *.o *.d
+	rm -f *.o *.d $(TESTS)
