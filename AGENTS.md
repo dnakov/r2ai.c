@@ -56,8 +56,15 @@ ms/task, prior to starting.
 - memory-bank/
 
 ## Environment Lessons [ADD NEW LESSONS BELOW WITH TIMESTAMPS]
+- 2025-05-17: Unit tests may require linking extra objects; watch for linker errors when updating Makefile.
 
 -
+- 2025-05-17: No memory-bank directory existed initially. Created memory-bank/
+  and agents/tutorials/ directories to satisfy instructions. Always run `ls /bin`,
+  `ls /usr/bin`, `ls /sbin`, and `ls /usr/sbin` before starting work.
 
 ## Post-mortem [ADD NEW POST-MORTEMS BELOW WITH TIMESTAMPS]
-- 
+- 2025-05-17: Makefile indentation issues caused build failures when adding tests.
+-
+- 2025-05-17: No misleading documents found. Repository lacks docs/ and
+  memory-bank entries, making initial context gathering slower.
