@@ -6,6 +6,8 @@ R2USRPLUGDIR=$(shell r2 -H R2_USER_PLUGINS)
 CFLAGS+=-I. -fPIC
 CFLAGS+=-Wall
 CFLAGS+=-g
+CFLAGS+=--coverage
+LDFLAGS+=--coverage
 
 USE_R2_CURL=1
 USE_LIBCURL=0
@@ -69,14 +71,36 @@ r2check:
 
 # Unit tests
 TESTS=tests/messages_test
+TOOLS_TEST_OBJ=tests/tools_test
+VDB_TEST_OBJ=tests/vdb_test
+MARKDOWN_TEST_OBJ=tests/markdown_test
+R2AI_CORE_TEST_OBJ=tests/r2ai_core_test
 
 $(TESTS): tests/messages_test.c messages.o
 	$(CC) $(CFLAGS) -o $@ tests/messages_test.c messages.o $(LDFLAGS)
 
+$(TOOLS_TEST_OBJ): tests/tools_test.c tools.o messages.o markdown.o
+	$(CC) $(CFLAGS) -o $@ tests/tools_test.c tools.o messages.o markdown.o $(LDFLAGS)
+
+$(VDB_TEST_OBJ): tests/vdb_test.c vdb.o messages.o
+	$(CC) $(CFLAGS) -o $@ tests/vdb_test.c vdb.o messages.o $(LDFLAGS)
+
+$(MARKDOWN_TEST_OBJ): tests/markdown_test.c markdown.o
+	$(CC) $(CFLAGS) -o $@ tests/markdown_test.c markdown.o $(LDFLAGS)
+
+$(R2AI_CORE_TEST_OBJ): tests/r2ai_core_test.c r2ai.o messages.o tools.o vdb.o auto.o openai.o anthropic.o r2ai_http.o markdown.o
+	$(CC) $(CFLAGS) -o $@ tests/r2ai_core_test.c r2ai.o messages.o tools.o vdb.o auto.o openai.o anthropic.o r2ai_http.o markdown.o $(LDFLAGS)
+
 .PHONY: test
 
-test: $(TESTS)
+test: $(TESTS) $(TOOLS_TEST_OBJ) $(VDB_TEST_OBJ) $(MARKDOWN_TEST_OBJ) $(R2AI_CORE_TEST_OBJ)
 	./tests/messages_test
+	./$(TOOLS_TEST_OBJ)
+	./$(VDB_TEST_OBJ)
+	./$(MARKDOWN_TEST_OBJ)
+	./$(R2AI_CORE_TEST_OBJ)
 
 clean:
-	rm -f *.o *.d $(TESTS)
+	rm -f *.o *.d $(TESTS) $(TOOLS_TEST_OBJ) $(VDB_TEST_OBJ) $(MARKDOWN_TEST_OBJ) $(R2AI_CORE_TEST_OBJ)
+	rm -f *.gcda *.gcno
+	rm -f tests/*.gcda tests/*.gcno
