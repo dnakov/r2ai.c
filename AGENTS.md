@@ -61,9 +61,11 @@ ms/task, prior to starting.
 - 2025-05-17: No memory-bank directory existed initially. Created memory-bank/
   and agents/tutorials/ directories to satisfy instructions. Always run `ls /bin`, `ls /usr/bin`, `ls /sbin`, and `ls /usr/sbin` before starting work.
 - 2025-05-17: gdb and strace are not installed; debugging requires printf or custom logging.
+- 2025-05-18: Inserting tab characters via apply_patch failed; used sed to prepend tabs when editing Makefile rules.
 
 ## Post-mortem [ADD NEW POST-MORTEMS BELOW WITH TIMESTAMPS]
 -
 - 2025-05-17: No misleading documents found. Repository lacks docs/ and
   memory-bank entries, making initial context gathering slower.
 - 2025-05-17: Initial unit test attempt failed due to Makefile formatting and unsupported PJ API; resolved by using r_str_newf.
+- 2025-05-18: New tests required additional radare2 objects and libraries; updated Makefile to link them correctly.

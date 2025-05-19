@@ -68,15 +68,19 @@ r2check:
 	@r2 -qcq --
 
 # Unit tests
-TESTS=tests/messages_test
+TESTS=tests/messages_test tests/additional_test
 
-$(TESTS): tests/messages_test.c messages.o
-	$(CC) $(CFLAGS) -o $@ tests/messages_test.c messages.o $(LDFLAGS)
+tests/messages_test: tests/messages_test.c messages.o
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+tests/additional_test: tests/additional_test.c messages.o markdown.o vdb.o tools.o
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 .PHONY: test
 
 test: $(TESTS)
 	./tests/messages_test
+	./tests/additional_test
 
 clean:
 	rm -f *.o *.d $(TESTS)
