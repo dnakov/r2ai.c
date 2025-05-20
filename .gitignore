@@ -10,3 +10,6 @@ dist/
 .env.test
 .env.production
 *.dylib
+*.gcno
+*.gcda
+coverage/

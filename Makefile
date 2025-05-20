@@ -1,11 +1,13 @@
 EXT=$(shell r2 -H R2_LIBEXT)
 CFLAGS+=$(shell pkg-config --cflags r_core)
 LDFLAGS+=$(shell pkg-config --libs r_core)
+LDFLAGS+=-lgcov
 R2SYSPLUGDIR=$(shell r2 -H R2_LIBR_PLUGINS)
 R2USRPLUGDIR=$(shell r2 -H R2_USER_PLUGINS)
 CFLAGS+=-I. -fPIC
 CFLAGS+=-Wall
 CFLAGS+=-g
+CFLAGS+=-fprofile-arcs -ftest-coverage
 
 USE_R2_CURL=1
 USE_LIBCURL=0
@@ -73,10 +75,21 @@ TESTS=tests/messages_test
 $(TESTS): tests/messages_test.c messages.o
 	$(CC) $(CFLAGS) -o $@ tests/messages_test.c messages.o $(LDFLAGS)
 
-.PHONY: test
+.PHONY: test coverage clean-coverage
 
 test: $(TESTS)
 	./tests/messages_test
+	@echo "Coverage Summary:"
+	@gcovr -r . --print-summary
+
+coverage: test
+	mkdir -p coverage
+	gcovr -r . --html --html-details -o coverage/coverage.html
+	@echo "Coverage report generated at coverage/coverage.html"
+
+clean-coverage:
+	find . -type f \( -name '*.gcno' -o -name '*.gcda' \) -delete
+	rm -rf coverage
 
 clean:
 	rm -f *.o *.d $(TESTS)
