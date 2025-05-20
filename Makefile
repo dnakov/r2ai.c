@@ -70,15 +70,19 @@ r2check:
 	@r2 -qcq --
 
 # Unit tests
-TESTS=tests/messages_test
+TESTS=tests/messages_test tests/tools_test
 
-$(TESTS): tests/messages_test.c messages.o
+tests/messages_test: tests/messages_test.c messages.o $(OBJS)
 	$(CC) $(CFLAGS) -o $@ tests/messages_test.c messages.o $(LDFLAGS)
+
+tests/tools_test: tests/tools_test.c tools.o $(OBJS)
+	$(CC) $(CFLAGS) -o $@ tests/tools_test.c tools.o $(LDFLAGS)
 
 .PHONY: test coverage clean-coverage
 
 test: $(TESTS)
 	./tests/messages_test
+	./tests/tools_test
 	@echo "Coverage Summary:"
 	@gcovr -r . --print-summary
 
