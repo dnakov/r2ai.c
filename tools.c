@@ -1,4 +1,5 @@
 #include "r2ai.h"
+#include "markdown.h" // For r2ai_markdown
 
 // Define the radare2 command tool
 static R2AI_Tool r2cmd_tool = {
@@ -55,27 +56,40 @@ R_API R2AI_Tools *r2ai_tools_parse(const char *tools_json) {
 		return NULL;
 	}
 
-	RJson *json = r_json_parse ((char *)tools_json);
+	char *tools_json_copy = strdup(tools_json);
+	if (!tools_json_copy) {
+		return NULL; // Failed to allocate memory for copy
+	}
+
+	RJson *json = r_json_parse (tools_json_copy);
 	if (!json || json->type != R_JSON_ARRAY) {
 		R_LOG_ERROR ("Invalid tools JSON format - expected array");
+		free(tools_json_copy);
 		r_json_free (json);
 		return NULL;
 	}
 
 	R2AI_Tools *tools = R_NEW0 (R2AI_Tools);
 	if (!tools) {
+		free(tools_json_copy);
 		r_json_free (json);
 		return NULL;
 	}
 
 	int n_tools = json->children.count;
-	tools->tools = R_NEWS0 (R2AI_Tool, n_tools);
-	if (!tools->tools) {
-		free (tools);
-		r_json_free (json);
-		return NULL;
+	tools->n_tools = n_tools; // Set n_tools on the struct
+
+	if (n_tools > 0) {
+		tools->tools = R_NEWS0 (R2AI_Tool, n_tools);
+		if (!tools->tools) { // Allocation failed for n_tools > 0
+			free(tools);
+			free(tools_json_copy);
+			r_json_free(json);
+			return NULL;
+		}
+	} else { // n_tools == 0
+		tools->tools = NULL; // Explicitly set to NULL for zero tools
 	}
-	tools->n_tools = n_tools;
 
 	int valid_tools = 0;
 	for (int i = 0; i < n_tools; i++) {
@@ -113,33 +127,47 @@ R_API R2AI_Tools *r2ai_tools_parse(const char *tools_json) {
 			// Just pass through the JSON as a string
 			if (parameters->type == R_JSON_STRING) {
 				tool->parameters = strdup (parameters->str_value);
-			} else {
-				// Use pj_raw to pass through any other raw JSON
-				PJ *pj = pj_new ();
-				if (pj) {
-					pj_raw (pj, "{}");
-					char *params_str = pj_drain (pj);
-					if (params_str) {
-						tool->parameters = strdup (params_str);
-						free (params_str);
-					}
+			} else { // For R_JSON_OBJECT or R_JSON_ARRAY types
+				char *params_str = r_json_to_string(parameters); // Convert the RJson object/array to string
+				if (params_str) {
+					tool->parameters = strdup (params_str);
+					free (params_str);
+				} else {
+					tool->parameters = strdup("{}"); // Fallback if string conversion fails
 				}
 			}
+		} else {
+			// No 'parameters' field found in the JSON for the tool.
+			// Set to NULL or an empty JSON object string as per requirements.
+			// Current tests (e.g., test_parse_invalid_json for missing_description_json)
+			// expect NULL if parameters are entirely missing.
+			tool->parameters = NULL;
 		}
 	}
 
 	// Update count of valid tools
 	tools->n_tools = valid_tools;
 
+	// If the original JSON array was not empty but no valid tools were parsed,
+	// then consider it a failure and return NULL.
+	// If the original JSON array was empty ("[]"), then 'n_tools' (json->children.count)
+	// would be 0, and 'valid_tools' would also be 0. In this case, we should
+	// return a valid R2AI_Tools struct with n_tools = 0.
+	if (valid_tools == 0 && json->children.count > 0) {
+		r2ai_tools_free(tools);
+		tools = NULL;
+	}
+
 	r_json_free (json);
+	free(tools_json_copy);
 	return tools;
 }
 
 // Function to convert R2AI_Tools to OpenAI format JSON
 R_API char *r2ai_tools_to_openai_json(const R2AI_Tools *tools) {
-	if (!tools || tools->n_tools <= 0) {
-		return NULL;
-	}
+	// The test_empty_tools_to_json expects "[]" for an empty tool list,
+	// not NULL. So, we always create a PJ object and start an array.
+	// if (!tools) return NULL; // Or strdup("[]") if strict about non-NULL for NULL input
 
 	PJ *pj = pj_new ();
 	if (!pj) {
@@ -168,7 +196,12 @@ R_API char *r2ai_tools_to_openai_json(const R2AI_Tools *tools) {
 
 		if (tool->parameters) {
 			pj_k (pj, "parameters");
-			pj_raw (pj, tool->parameters);
+			pj_raw (pj, tool->parameters); // tool->parameters is expected to be a JSON string for the object
+		} else {
+			// If tool->parameters is NULL, output "parameters": {}
+			pj_k (pj, "parameters");
+			pj_o (pj); // Start empty object
+			pj_end (pj); // End empty object
 		}
 
 		pj_end (pj); // End function object
@@ -187,9 +220,9 @@ R_API char *r2ai_tools_to_openai_json(const R2AI_Tools *tools) {
 
 // Function to convert R2AI_Tools to Anthropic format JSON
 R_API char *r2ai_tools_to_anthropic_json(const R2AI_Tools *tools) {
-	if (!tools || tools->n_tools <= 0) {
-		return NULL;
-	}
+	// The test_empty_tools_to_json expects "[]" for an empty tool list,
+	// not NULL. So, we always create a PJ object and start an array.
+	// if (!tools) return NULL; // Or strdup("[]")
 
 	PJ *pj = pj_new ();
 	if (!pj) {
@@ -212,9 +245,14 @@ R_API char *r2ai_tools_to_anthropic_json(const R2AI_Tools *tools) {
 			pj_ks (pj, "description", tool->description);
 		}
 
-		if (tool->parameters) {
+		if (tool->parameters) { // Anthropic calls it input_schema, but source is tool->parameters
 			pj_k (pj, "input_schema");
-			pj_raw (pj, tool->parameters);
+			pj_raw (pj, tool->parameters); // tool->parameters is expected to be a JSON string for the object
+		} else {
+			// If tool->parameters is NULL, output "input_schema": {}
+			pj_k (pj, "input_schema");
+			pj_o (pj); // Start empty object
+			pj_end (pj); // End empty object
 		}
 
 		pj_end (pj); // End tool object
@@ -277,70 +315,82 @@ R_API char *r2ai_r2cmd(RCore *core, RJson *args, bool hide_tool_output) {
 		return strdup ("{ \"res\":\"You are already in r2!\" }");
 	}
 
-	bool ask_to_execute = r_config_get_b (core->config, "r2ai.auto.ask_to_execute");
+	// Safely get config, default to false (don't ask) if core/config is NULL.
+	bool ask_to_execute = (core && core->config) ? r_config_get_b (core->config, "r2ai.auto.ask_to_execute") : false;
 	char *edited_command = NULL;
 
 	if (ask_to_execute) {
-		// Check if command contains newlines to determine if it's multi-line
-		bool is_multiline = strchr (command, '\n') != NULL;
+		if (core && core->cons) {
+			// Check if command contains newlines to determine if it's multi-line
+			bool is_multiline = strchr (command, '\n') != NULL;
 
-		if (is_multiline) {
-			// Use editor for multi-line commands
-			edited_command = strdup (command);
-#if R2_VERSION_NUMBER >= 50909
-			r_cons_editor (core->cons, NULL, edited_command);
-#else
-			r_cons_editor (NULL, edited_command);
-#endif
-			command = edited_command;
-		} else {
-			// For single-line commands, push the command to input buffer
-			r_cons_newline ();
-			r_cons_printf ("\x1b[31m[edit cmd]>\x1b[0m ");
-			r_cons_flush ();
-			// Push the command to the input buffer
-			r_cons_readpush (command, strlen (command));
-			r_cons_readpush ("\x05", 1); // Ctrl+E - move to end
-
-			// Get user input with command pre-filled
-#if R2_VERSION_NUMBER >= 50909
-			const char *readline_result = r_line_readline (core->cons);
-#else
-			const char *readline_result = r_line_readline ();
-#endif
-
-			// Check if interrupted or ESC pressed (readline_result is NULL or empty)
-			if (r_cons_is_breaked () || !readline_result || !*readline_result) {
-				R_LOG_INFO ("Command execution cancelled %s", readline_result);
-				return strdup ("R2AI_SIGINT");
-			}
-
-			// Process the result
-			if (readline_result && *readline_result) {
-				edited_command = strdup (readline_result);
-				command = edited_command;
-			} else {
-				// If user just pressed enter, keep the original command
+			if (is_multiline) {
+				// Use editor for multi-line commands
 				edited_command = strdup (command);
-				command = edited_command;
+	#if R2_VERSION_NUMBER >= 50909
+				r_cons_editor (core->cons, NULL, edited_command);
+	#else
+				r_cons_editor (NULL, edited_command); // This might need core->cons if available
+	#endif
+				command = edited_command; // Use the potentially edited command
+			} else {
+				// For single-line commands, push the command to input buffer
+				r_cons_newline ();
+				r_cons_printf ("\x1b[31m[edit cmd]>\x1b[0m ");
+				r_cons_flush ();
+				// Push the command to the input buffer
+				r_cons_readpush (command, strlen (command));
+				r_cons_readpush ("\x05", 1); // Ctrl+E - move to end
+
+				// Get user input with command pre-filled
+	#if R2_VERSION_NUMBER >= 50909
+				const char *readline_result = r_line_readline (core->cons);
+	#else
+				const char *readline_result = r_line_readline ();
+	#endif
+
+				// Check if interrupted or ESC pressed (readline_result is NULL or empty)
+				if (r_cons_is_breaked () || !readline_result || !*readline_result) {
+					eprintf ("[INFO] Command execution cancelled by user.\n");
+					free(edited_command);
+					return strdup ("R2AI_SIGINT");
+				}
+
+				// Process the result
+				if (readline_result && *readline_result) {
+					free(edited_command);
+					edited_command = strdup (readline_result);
+					command = edited_command;
+				} else {
+					// If user just pressed enter, ensure edited_command holds the command
+					if (!edited_command) edited_command = strdup(command);
+					else if (command != edited_command) { free(edited_command); edited_command = strdup(command); }
+				}
 			}
+		} else if (ask_to_execute) { // Only log warning if we intended to ask
+			eprintf("[WARN] Cannot ask for r2cmd execution: RCore or RCons not available for interactive editing.\n");
+			// Proceed with original command if interactive editing is not possible
 		}
 	}
 
 	if (!hide_tool_output) {
-		char *red_command = r_str_newf ("\x1b[31m%s\x1b[0m\n", command);
-		r_cons_write (red_command, strlen (red_command));
-		r_cons_flush ();
-		free (red_command);
+		if (core && core->cons) {
+			char *red_command = r_str_newf ("\x1b[31m%s\x1b[0m\n", command);
+			r_cons_write (red_command, strlen (red_command));
+			r_cons_flush ();
+			free (red_command);
+		} else {
+			eprintf("\x1b[31m%s\x1b[0m\n", command); // Fallback if no console
+		}
 	}
 
 	char *json_cmd = to_cmd (command);
 	if (!json_cmd) {
-		free (edited_command); // Free edited_command if allocated
+		free (edited_command);
 		return strdup ("{ \"res\":\"Failed to create JSON command\" }");
 	}
 
-	char *cmd_output = r_core_cmd_str (core, json_cmd);
+	char *cmd_output = core ? r_core_cmd_str (core, json_cmd) : NULL; // Guarded call
 	free (json_cmd);
 
 	// Free edited_command if we allocated it
@@ -373,64 +423,76 @@ R_API char *r2ai_qjs(RCore *core, RJson *args, bool hide_tool_output) {
 		return strdup ("{ \"res\":\"Script value is NULL or empty\" }");
 	}
 
-	bool ask_to_execute = r_config_get_b (core->config, "r2ai.auto.ask_to_execute");
+	// Safely get config, default to false (don't ask) if core/config is NULL.
+	bool ask_to_execute = (core && core->config) ? r_config_get_b (core->config, "r2ai.auto.ask_to_execute") : false;
 	const char *script = script_json->str_value;
 	char *edited_script = NULL;
 
 	if (ask_to_execute) {
-		// Check if script contains newlines to determine if it's multi-line
-		bool is_multiline = strchr (script, '\n') != NULL;
+		if (core && core->cons) {
+			// Check if script contains newlines to determine if it's multi-line
+			bool is_multiline = strchr (script, '\n') != NULL;
 
-		if (is_multiline) {
-			// Use editor for multi-line scripts
-			edited_script = strdup (script);
-#if R2_VERSION_NUMBER >= 50909
-			r_cons_editor (core->cons, NULL, edited_script);
-#else
-			r_cons_editor (NULL, edited_script);
-#endif
-			script = edited_script;
-		} else {
-			// For single-line scripts, push the script to input buffer
-			r_cons_printf ("\x1b[31m[edit js]>\x1b[0m ");
-			r_cons_flush ();
-
-			// Push the script to the input buffer
-			r_cons_readpush (script, strlen (script));
-			r_cons_readpush ("\x05", 1); // Ctrl+E - move to end
-
-			// Get user input with script pre-filled
-#if R2_VERSION_NUMBER >= 50909
-			const char *readline_result = r_line_readline (core->cons);
-#else
-			const char *readline_result = r_line_readline ();
-#endif
-
-			// Check if interrupted or ESC pressed (readline_result is NULL or empty)
-			if (r_cons_is_breaked () || !readline_result || !*readline_result) {
-				free (edited_script); // Free if already allocated
-				return strdup ("R2AI_SIGINT");
-			}
-
-			// Process the result
-			if (readline_result && *readline_result) {
-				edited_script = strdup (readline_result);
-				script = edited_script;
-			} else {
-				// If user just pressed enter, keep the original script
+			if (is_multiline) {
+				// Use editor for multi-line scripts
 				edited_script = strdup (script);
-				script = edited_script;
+	#if R2_VERSION_NUMBER >= 50909
+				r_cons_editor (core->cons, NULL, edited_script);
+	#else
+				r_cons_editor (NULL, edited_script); // Consider if core->cons should be passed
+	#endif
+				script = edited_script; // Use the potentially edited script
+			} else {
+				// For single-line scripts, push the script to input buffer
+				r_cons_printf ("\x1b[31m[edit js]>\x1b[0m ");
+				r_cons_flush ();
+
+				// Push the script to the input buffer
+				r_cons_readpush (script, strlen (script));
+				r_cons_readpush ("\x05", 1); // Ctrl+E - move to end
+
+				// Get user input with script pre-filled
+	#if R2_VERSION_NUMBER >= 50909
+				const char *readline_result = r_line_readline (core->cons);
+	#else
+				const char *readline_result = r_line_readline ();
+	#endif
+
+				// Check if interrupted or ESC pressed (readline_result is NULL or empty)
+				if (r_cons_is_breaked () || !readline_result || !*readline_result) {
+					eprintf ("[INFO] QJS execution cancelled by user.\n");
+					free (edited_script);
+					return strdup ("R2AI_SIGINT");
+				}
+
+				// Process the result
+				if (readline_result && *readline_result) {
+					free(edited_script);
+					edited_script = strdup (readline_result);
+					script = edited_script;
+				} else {
+					// If user just pressed enter, ensure edited_script holds the script
+					if(!edited_script) edited_script = strdup(script);
+					else if (script != edited_script) { free(edited_script); edited_script = strdup(script); }
+				}
 			}
+		} else if (ask_to_execute) { // Only log warning if we intended to ask
+			eprintf("[WARN] Cannot ask for QJS execution: RCore or RCons not available for interactive editing.\n");
+			// Proceed with original script if interactive editing is not possible
 		}
 	}
 
 	if (!hide_tool_output) {
-		char *print_script = r_str_newf ("\n```js\n%s\n```", script);
-		char *print_script_rendered = r2ai_markdown (print_script);
-		r_cons_write (print_script_rendered, strlen (print_script_rendered));
-		r_cons_flush ();
-		free (print_script);
-		free (print_script_rendered);
+		if (core && core->cons) {
+			char *print_script = r_str_newf ("\n```js\n%s\n```", script);
+			char *print_script_rendered = r2ai_markdown (print_script);
+			r_cons_write (print_script_rendered, strlen (print_script_rendered));
+			r_cons_flush ();
+			free (print_script);
+			free (print_script_rendered);
+		} else {
+			eprintf("\n```js\n%s\n```\n", script); // Fallback if no console
+		}
 	}
 	char *payload = r_str_newf ("var console = { log:r2log, warn:r2log, info:r2log, error:r2log, debug:r2log };%s", script);
 
@@ -460,10 +522,13 @@ R_API char *r2ai_qjs(RCore *core, RJson *args, bool hide_tool_output) {
 		return strdup ("{ \"res\":\"Failed to execute qjs\" }");
 	}
 
-	char *cmd_output = r_core_cmd_str (core, json_cmd);
+	char *cmd_output = core ? r_core_cmd_str (core, json_cmd) : NULL; // Guarded call
 	free (json_cmd);
 	free (cmd);
 
+	if (!cmd_output) {
+		return strdup ("{ \"res\":\"Command returned no output or failed\" }");
+	}
 	return cmd_output;
 }
 
@@ -479,17 +544,27 @@ R_API char *execute_tool(RCore *core, const char *tool_name, const char *args) {
 		return r_str_newf ("Invalid JSON arguments: %s", args);
 	}
 
-	RJson *args_json = r_json_parse ((char *)args);
+	// r_json_parse modifies its input, so we need to pass a mutable copy if args might be a literal.
+	char *args_copy = strdup(args);
+	if (!args_copy) {
+		return strdup ("{ \"res\":\"Failed to allocate memory for args copy\" }");
+	}
+	RJson *args_json = r_json_parse (args_copy);
+	free(args_copy); // free the copy after parsing
+
 	if (!args_json) {
-		return r_str_newf ("Failed to parse arguments: %s", args);
+		return r_str_newf ("Failed to parse arguments: %s", args); // args is still the original here
 	}
 
-	bool hide_tool_output = r_config_get_b (core->config, "r2ai.auto.hide_tool_output");
+	bool hide_tool_output = (core && core->config) ? r_config_get_b (core->config, "r2ai.auto.hide_tool_output") : true; // Default to true if no core/config
 
 	char *print_name = r_str_newf ("\x1b[1;32m\x1b[4m[%s]>\x1b[0m ", tool_name);
-	r_cons_write (print_name, strlen (print_name));
-	r_cons_flush ();
-
+	if (core && core->cons) {
+		r_cons_write (print_name, strlen (print_name));
+		r_cons_flush ();
+	} else {
+		eprintf("%s", print_name); // Fallback if no console
+	}
 	free (print_name);
 	char *tool_result = NULL;
 
@@ -530,7 +605,7 @@ R_API char *execute_tool(RCore *core, const char *tool_name, const char *args) {
 
 	if (!json) {
 		// JSON parsing failed, return original content
-		R_LOG_WARN ("Failed to parse JSON response from tool execution");
+		eprintf ("[WARN] Failed to parse JSON response from tool execution: %s\n", tool_result ? tool_result : "(null)");
 		result = strdup (tool_result);
 		free (tool_result);
 		return result;

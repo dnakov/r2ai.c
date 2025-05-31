@@ -5,10 +5,22 @@
 #include "../r2ai.h"    // For R2AI_Tools, r2ai_tools_parse, r2ai_tools_free
 #include <r_util/r_json.h> // For RJson, if needed for more complex assertions
 
+// Forward declarations for functions from tools.c if not fully covered by r2ai.h for tests
+// char *execute_tool(RCore *core, const char *tool_name, const char *args); // This is also in r2ai.h
+char *r2ai_r2cmd(RCore *core, RJson *args, bool hide_tool_output);
+char *r2ai_qjs(RCore *core, RJson *args, bool hide_tool_output);
+
 // Helper for assertions
 void assert_true(bool condition, const char* message) {
     if (!condition) {
         fprintf(stderr, "Assertion failed: %s\n", message);
+        exit(1);
+    }
+}
+
+void assert_not_null(const void* ptr, const char* message) {
+    if (ptr == NULL) {
+        fprintf(stderr, "Assertion failed: %s. Expected not NULL.\n", message);
         exit(1);
     }
 }
@@ -23,6 +35,7 @@ void assert_streq(const char* s1, const char* s2, const char* message) {
 
 // Test for r2ai_tools_parse with valid JSON
 void test_parse_valid_json() {
+    printf("DEBUG: Starting test_parse_valid_json\n"); fflush(stdout);
     printf("Running test_parse_valid_json...\n");
     const char *valid_json = "["
                              "  {"
@@ -78,6 +91,7 @@ void test_parse_valid_json() {
     // A more detailed check would parse the JSON string itself.
     assert_true(tool1->parameters != NULL, "tool1->parameters should not be NULL");
     // Example check for a substring in parameters:
+    printf("DEBUG: tool1->parameters = %s\n", tool1->parameters ? tool1->parameters : "NULL"); fflush(stdout);
     assert_true(strstr(tool1->parameters, "\"location\"") != NULL, "tool1->parameters content check");
 
 
@@ -95,6 +109,7 @@ void test_parse_valid_json() {
 
 // Test for r2ai_tools_parse with invalid JSON
 void test_parse_invalid_json() {
+    printf("DEBUG: Starting test_parse_invalid_json\n"); fflush(stdout);
     printf("Running test_parse_invalid_json...\n");
     R2AI_Tools *tools;
 
@@ -173,6 +188,7 @@ void test_parse_invalid_json() {
 
 // Test for r2ai_tools_parse with an empty JSON array
 void test_parse_empty_array_json() {
+    printf("DEBUG: Starting test_parse_empty_array_json\n"); fflush(stdout);
     printf("Running test_parse_empty_array_json...\n");
     const char *empty_array_json = "[]";
     R2AI_Tools *tools = r2ai_tools_parse(empty_array_json);
@@ -217,6 +233,7 @@ R2AI_Tools* create_sample_tools() {
 }
 
 void test_tools_to_openai_json() {
+    printf("DEBUG: Starting test_tools_to_openai_json\n"); fflush(stdout);
     printf("Running test_tools_to_openai_json...\n");
     R2AI_Tools *tools = create_sample_tools();
     assert_true(tools != NULL, "Failed to create sample tools for OpenAI test");
@@ -240,6 +257,7 @@ void test_tools_to_openai_json() {
 }
 
 void test_tools_to_anthropic_json() {
+    printf("DEBUG: Starting test_tools_to_anthropic_json\n"); fflush(stdout);
     printf("Running test_tools_to_anthropic_json...\n");
     R2AI_Tools *tools = create_sample_tools();
     assert_true(tools != NULL, "Failed to create sample tools for Anthropic test");
@@ -261,6 +279,7 @@ void test_tools_to_anthropic_json() {
 }
 
 void test_empty_tools_to_json() {
+    printf("DEBUG: Starting test_empty_tools_to_json\n"); fflush(stdout);
     printf("Running test_empty_tools_to_json...\n");
     R2AI_Tools tools_empty = { .tools = NULL, .n_tools = 0 };
     char *json_str;
@@ -293,6 +312,7 @@ void test_empty_tools_to_json() {
 }
 
 void test_tools_with_optional_fields_to_json() {
+    printf("DEBUG: Starting test_tools_with_optional_fields_to_json\n"); fflush(stdout);
     printf("Running test_tools_with_optional_fields_to_json...\n");
     R2AI_Tools *tools = R_NEW0(R2AI_Tools);
     assert_true(tools != NULL, "Failed to allocate tools structure");
@@ -365,6 +385,7 @@ void test_tools_with_optional_fields_to_json() {
 }
 
 void test_r2ai_get_tools() {
+    printf("DEBUG: Starting test_r2ai_get_tools\n"); fflush(stdout);
     printf("Running test_r2ai_get_tools...\n");
 
     const R2AI_Tools *global_tools = r2ai_get_tools();
@@ -422,6 +443,7 @@ void free_mock_rconfig_core(RCore* core) {
 }
 
 void test_execute_tool_dispatch() {
+    printf("DEBUG: Starting test_execute_tool_dispatch\n"); fflush(stdout);
     printf("Running test_execute_tool_dispatch...\n");
     RCore *core = NULL; // Passing NULL core, most tool executions will fail internally or handle NULL.
                         // The goal here is to test dispatch and basic error handling in execute_tool itself.
@@ -442,9 +464,8 @@ void test_execute_tool_dispatch() {
     // Case 3: Unknown tool
     result = execute_tool(core, "unknown_tool", "{}");
     assert_not_null(result, "execute_tool(unknown, ...) should return an error string");
-    // messages.c execute_tool returns: { "res":"Unknown tool" }
-    // tools.c execute_tool returns: { "res":"Unknown tool" } - This matches the code in tools.c
-    assert_true(strstr(result, "\"res\":\"Unknown tool\"") != NULL, "Error message for unknown_tool mismatch");
+    // execute_tool extracts the value of "res", so we expect "Unknown tool"
+    assert_true(strcmp(result, "Unknown tool") == 0, "Error message for unknown_tool mismatch");
     free(result);
     
     // Case 4: Invalid JSON arguments string
@@ -484,7 +505,8 @@ void test_execute_tool_dispatch() {
 }
 
 void test_r2ai_r2cmd_arg_handling() {
-    printf("Running test_r2ai_r2cmd_arg_handling...\n");
+    printf("DEBUG: Starting test_r2ai_r2cmd_arg_handling\n"); // No fflush here
+    printf("Running test_r2ai_r2cmd_arg_handling...\n"); fflush(stdout);
     RCore *core = NULL; // NULL core
     char *result;
     RJson *args_json;
@@ -496,32 +518,89 @@ void test_r2ai_r2cmd_arg_handling() {
     free(result);
 
     // Case 2: Args RJson missing "command" field
-    args_json = r_json_parse("{\"foo\":\"bar\"}");
+    char *json_str_case2 = strdup("{\"foo\":\"bar\"}");
+    args_json = r_json_parse(json_str_case2);
     assert_not_null(args_json, "Failed to parse test JSON for r2cmd");
     result = r2ai_r2cmd(core, args_json, false);
     assert_not_null(result, "r2cmd(missing command) should return error string");
     assert_true(strstr(result, "No command in tool call arguments") != NULL, "Error for r2cmd missing command field");
     free(result);
     r_json_free(args_json);
+    free(json_str_case2);
     
     // Case 3: "command" field is not a string (e.g. int)
     // r_json_get (args, "command") would return an RJson object not of type string.
     // Then command_json->str_value would be NULL.
-    args_json = r_json_parse("{\"command\":123}");
+    char *json_str_case3 = strdup("{\"command\":123}");
+    args_json = r_json_parse(json_str_case3);
     assert_not_null(args_json, "Failed to parse test JSON for r2cmd non-string command");
     result = r2ai_r2cmd(core, args_json, false);
     assert_not_null(result, "r2cmd(non-string command) should return error string");
+    // printf("DEBUG: test_r2ai_r2cmd_arg_handling Case 3 result = [%s]\n", result ? result : "NULL"); fflush(stdout); // Keep for debugging if needed
     assert_true(strstr(result, "No command in tool call arguments") != NULL, "Error for r2cmd non-string command field");
     free(result);
-    r_json_free(args_json);
+    if (args_json) r_json_free(args_json);
+    free(json_str_case3);
 
     // Deeper tests require mocked RCore for config and r_core_cmd_str
     printf("test_r2ai_r2cmd_arg_handling passed.\n");
 }
 
 void test_r2ai_qjs_arg_handling() {
-    printf("Running test_r2ai_qjs_arg_handling...\n");
-    RCore *core = NULL; // NULL core
+    printf("DEBUG: Starting test_r2ai_qjs_arg_handling\n"); fflush(stdout);
+    printf("Running test_r2ai_qjs_arg_handling...\n"); fflush(stdout);
+    // RCore *core = NULL; // NULL core
+    // char *result;
+    // RJson *args_json;
+
+    // // Case 1: NULL args RJson
+    // result = r2ai_qjs(core, NULL, false);
+    // assert_not_null(result, "qjs(NULL RJson) should return error string");
+    // assert_true(strstr(result, "Script is NULL") != NULL, "Error for qjs NULL RJson args");
+    // free(result);
+
+    // // Case 2: Args RJson missing "script" field
+    // char *qjs_json_str_case2 = strdup("{\"foo\":\"bar\"}");
+    // args_json = r_json_parse(qjs_json_str_case2);
+    // // free(qjs_json_str_case2); // Moved after r_json_free
+    // assert_not_null(args_json, "Failed to parse test JSON for qjs");
+    // result = r2ai_qjs(core, args_json, false);
+    // assert_not_null(result, "qjs(missing script) should return error string");
+    // assert_true(strstr(result, "No script field found") != NULL, "Error for qjs missing script field");
+    // free(result);
+    // r_json_free(args_json);
+    // free(qjs_json_str_case2);
+
+    // // Case 3: "script" field is not a string or is null
+    // char *qjs_json_str_case3 = strdup("{\"script\":null}");
+    // args_json = r_json_parse(qjs_json_str_case3);
+    // // free(qjs_json_str_case3); // Moved after r_json_free
+    // assert_not_null(args_json, "Failed to parse test JSON for qjs null script");
+    // result = r2ai_qjs(core, args_json, false);
+    // assert_not_null(result, "qjs(null script value) should return error string");
+    // printf("DEBUG: test_r2ai_qjs_arg_handling Case 3 result = %s\n", result ? result : "NULL"); fflush(stdout);
+    // assert_true(strstr(result, "Script value is NULL or empty") != NULL, "Error for qjs null script value");
+    // free(result);
+    // r_json_free(args_json);
+    // free(qjs_json_str_case3);
+
+    // // Case 4: "script" field is empty string
+    // // This should proceed to command construction, but fail at r_core_cmd_str due to NULL core.
+    // char *qjs_json_str_case4 = strdup("{\"script\":\"\"}");
+    // args_json = r_json_parse(qjs_json_str_case4);
+    // // free(qjs_json_str_case4); // Moved after r_json_free
+    // assert_not_null(args_json, "Failed to parse test JSON for qjs empty script");
+    // result = r2ai_qjs(core, args_json, false);
+    // assert_not_null(result, "qjs(empty script) should return string");
+    // // Expected: "{ \"res\":\"Command returned no output or failed\" }" due to NULL core
+    // assert_true(strstr(result, "Command returned no output or failed") != NULL, "qjs(empty script) with NULL core error check");
+    // free(result);
+    // r_json_free(args_json);
+    // // free(qjs_json_str_case4); // This was missing from previous version of file.
+
+    // // Deeper tests (actual command construction, base64 encoding) require mocked RCore or more complex setup.
+    //printf("test_r2ai_qjs_arg_handling passed (fully stubbed).\n"); // Remove stubbed message
+    RCore *core = NULL;
     char *result;
     RJson *args_json;
 
@@ -532,35 +611,39 @@ void test_r2ai_qjs_arg_handling() {
     free(result);
 
     // Case 2: Args RJson missing "script" field
-    args_json = r_json_parse("{\"foo\":\"bar\"}");
+    char *qjs_json_str_case2 = strdup("{\"foo\":\"bar\"}");
+    args_json = r_json_parse(qjs_json_str_case2);
     assert_not_null(args_json, "Failed to parse test JSON for qjs");
     result = r2ai_qjs(core, args_json, false);
     assert_not_null(result, "qjs(missing script) should return error string");
     assert_true(strstr(result, "No script field found") != NULL, "Error for qjs missing script field");
     free(result);
     r_json_free(args_json);
+    free(qjs_json_str_case2);
 
     // Case 3: "script" field is not a string or is null
-    args_json = r_json_parse("{\"script\":null}");
+    char *qjs_json_str_case3 = strdup("{\"script\":null}");
+    args_json = r_json_parse(qjs_json_str_case3);
     assert_not_null(args_json, "Failed to parse test JSON for qjs null script");
     result = r2ai_qjs(core, args_json, false);
     assert_not_null(result, "qjs(null script value) should return error string");
+    // printf("DEBUG: test_r2ai_qjs_arg_handling Case 3 result = %s\n", result ? result : "NULL"); fflush(stdout); // Keep commented for now
     assert_true(strstr(result, "Script value is NULL or empty") != NULL, "Error for qjs null script value");
     free(result);
     r_json_free(args_json);
+    free(qjs_json_str_case3);
     
     // Case 4: "script" field is empty string
-    // This should proceed to command construction, but fail at r_core_cmd_str due to NULL core.
-    args_json = r_json_parse("{\"script\":\"\"}");
+    char *qjs_json_str_case4 = strdup("{\"script\":\"\"}");
+    args_json = r_json_parse(qjs_json_str_case4);
     assert_not_null(args_json, "Failed to parse test JSON for qjs empty script");
     result = r2ai_qjs(core, args_json, false);
     assert_not_null(result, "qjs(empty script) should return string");
-    // Expected: "{ \"res\":\"Command returned no output or failed\" }" due to NULL core
     assert_true(strstr(result, "Command returned no output or failed") != NULL, "qjs(empty script) with NULL core error check");
     free(result);
     r_json_free(args_json);
+    free(qjs_json_str_case4); // Ensure this is present
 
-    // Deeper tests (actual command construction, base64 encoding) require mocked RCore or more complex setup.
     printf("test_r2ai_qjs_arg_handling passed.\n");
 }
 

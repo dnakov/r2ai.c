@@ -75,8 +75,8 @@ TESTS=tests/messages_test tests/tools_test
 tests/messages_test: tests/messages_test.c messages.o $(OBJS)
 	$(CC) $(CFLAGS) -o $@ tests/messages_test.c messages.o $(LDFLAGS)
 
-tests/tools_test: tests/tools_test.c tools.o $(OBJS)
-	$(CC) $(CFLAGS) -o $@ tests/tools_test.c tools.o $(LDFLAGS)
+tests/tools_test: tests/tools_test.c tools.o markdown.o messages.o $(OBJS)
+	$(CC) $(CFLAGS) -o $@ tests/tools_test.c tools.o markdown.o messages.o $(LDFLAGS)
 
 .PHONY: test coverage clean-coverage
 
